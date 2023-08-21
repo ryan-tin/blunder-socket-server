@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+
+# javascript files compiled from typescript files will go here
+dist/

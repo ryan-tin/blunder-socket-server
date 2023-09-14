@@ -51,12 +51,13 @@ game.on('connection', (socket) => {
   })
 
   // recieving a sent move is relayed to all others in that room
-  socket.on('send move', ({ roomId, FEN }) => {
+  socket.on('send move', ({ roomId, FEN, lastMove }) => {
     if (DEBUG) {
       console.log('roomId', roomId);
       console.log('FEN', FEN);
+      console.log('lastMove', lastMove);
     }
-    socket.to(roomId).emit('send move', FEN);
+    socket.to(roomId).emit('send move', { FEN: FEN, lastMove: lastMove });
   })
 
   socket.on('disconnect', (reason) => {

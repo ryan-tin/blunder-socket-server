@@ -30,43 +30,107 @@ lobbyNamespace.on('connection', (socket) => {
   })
 
   socket.on('disconnect', (reason) => {
-    console.log(`A user disconnected lobby: ${reason}`);
+    console.log(`disconnected lobby: ${reason}`);
   })
 });
 
 
-// use rooms for games
+interface timeKeeperValue {
+  white: number // time remaining for white
+  whiteIntervalId: NodeJS.Timeout
+  black: number
+  blackIntervalId: NodeJS.Timeout
+  increment: number // increment per move
+}
+
+// stores needed values for keeping track of both player's times
+// key is the roomId
+// value is an object
+const time = new Map() as Map<string, timeKeeperValue>;
+
 const game = io.of("/game");
 game.on('connection', (socket) => {
-  if (DEBUG) {
-    console.log(`joined game ${socket.id}`)
-  }
+  console.log('connected to game', socket.id);
 
-  socket.on('join room', (roomId) => {
-    if (DEBUG) {
-      console.log(`join request for room <${roomId}>`);
+  socket.on('game setup', (roomId, timeControl) => {
+    // on game initialization, store data needed to keep track of each player's time in Map
+    if (!time.has(roomId)) {
+      time.set(roomId, {
+        white: timeControl.totalTime * 60, // time remaining in seconds
+        whiteIntervalId: null,
+        black: timeControl.totalTime * 60,
+        blackIntervalId: null,
+        increment: parseInt(timeControl.increment),
+      });
     }
-    // client will remember what room it has joined
-    socket.join(roomId);
+    // TODO: delete this roomId when the game is over so that the roomId
+    // can be reused
+    // overwrite no matter what?
   })
 
   // recieving a sent move is relayed to all others in that room
-  socket.on('send move', ({ roomId, FEN, lastMove }) => {
-    if (DEBUG) {
-      console.log('roomId', roomId);
-      console.log('FEN', FEN);
-      console.log('lastMove', lastMove);
+  socket.on('send move', (message) => {
+    // console.log("message", message);
+    // relay message to everyone in the lobby
+    game.emit('send move', message);
+
+    // start ticking opponent's clock and increment own clock
+    if (message.sentBy === 'b') {
+      // start ticking white's clock
+      time.set(message.roomId, {
+        ...time.get(message.roomId),
+        whiteIntervalId: setInterval(() => {
+          // decrement white's time by 1 every second
+          time.set(message.roomId, {
+            ...time.get(message.roomId),
+            white: time.get(message.roomId).white - 1
+          })
+
+          // send updated server time to client!
+          game.emit('time', {
+            roomId: message.roomId,
+            white: time.get(message.roomId).white,
+            black: time.get(message.roomId).black
+          })
+
+        }, 1000),
+        black: time.get(message.roomId).black + time.get(message.roomId).increment
+      })
+      clearInterval(time.get(message.roomId).blackIntervalId);
+    } else {
+      // start ticking black's clock
+      time.set(message.roomId, {
+        ...time.get(message.roomId),
+        blackIntervalId: setInterval(() => {
+          // decrement black's time by 1 every second
+          time.set(message.roomId, {
+            ...time.get(message.roomId),
+            black: time.get(message.roomId).black - 1
+          })
+
+          // send updated server time to client!
+          game.emit('time', {
+            roomId: message.roomId,
+            white: time.get(message.roomId).white,
+            black: time.get(message.roomId).black
+          })
+
+        }, 1000),
+        white: time.get(message.roomId).white + time.get(message.roomId).increment
+      })
+      clearInterval(time.get(message.roomId).whiteIntervalId);
     }
-    socket.to(roomId).emit('send move', { FEN: FEN, lastMove: lastMove });
+  })
+
+  // server updated for time is relayed to everyone in that room
+  socket.on('time', (message: any) => {
+    game.emit('time', message);
   })
 
   socket.on('disconnect', (reason) => {
-    if (DEBUG) {
-      console.log(`<${socket.id}> disconnected game: [${reason}]`);
-    }
+    console.log(`<${socket.id}> disconnected game: [${reason}]`);
   })
 })
-
 
 server.listen(port, () => {
   return console.log(`Express is listening at *:${port}`);

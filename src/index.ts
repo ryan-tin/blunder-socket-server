@@ -86,6 +86,11 @@ game.on('connection', (socket) => {
             white: time.get(message.roomId).white - 1
           })
 
+          // stop ticking when one player runs out of time
+          if (time.get(message.roomId).white <= 0) {
+            clearInterval(time.get(message.roomId).whiteIntervalId);
+          }
+
           // send updated server time to client!
           game.emit('time', {
             roomId: message.roomId,
@@ -107,6 +112,11 @@ game.on('connection', (socket) => {
             ...time.get(message.roomId),
             black: time.get(message.roomId).black - 1
           })
+
+          // stop ticking when player runs out of time
+          if (time.get(message.roomId).black <= 0) {
+            clearInterval(time.get(message.roomId).blackIntervalId);
+          }
 
           // send updated server time to client!
           game.emit('time', {

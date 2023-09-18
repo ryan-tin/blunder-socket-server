@@ -137,6 +137,12 @@ game.on('connection', (socket) => {
     game.emit('time', message);
   })
 
+  // stop timers when the game ends
+  socket.on('game end', (roomId) => {
+    clearInterval(time.get(roomId).whiteIntervalId);
+    clearInterval(time.get(roomId).blackIntervalId);
+  })
+
   socket.on('disconnect', (reason) => {
     console.log(`<${socket.id}> disconnected game: [${reason}]`);
   })
